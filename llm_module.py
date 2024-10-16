@@ -8,27 +8,52 @@ def load_llm_model():
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     return tokenizer, model
 
-def generate_icd_codes(text: str, model_tuple, max_length: int = 128) -> list:
-    """Generate ICD-10 codes using a pre-trained LLM."""
+def generate_prompt(text: str) -> str:
+    """Generate a sophisticated prompt for ICD-10 code prediction."""
+    few_shot_examples = [
+        {"text": "Patient with chest pain and shortness of breath.", "codes": "I20.9, R06.02"},
+        {"text": "Fever and cough for 3 days.", "codes": "R50.9, R05"}
+    ]
+    
+    prompt = "Given a medical text, predict the most likely ICD-10 codes. Explain your reasoning for each code.\n\n"
+    
+    for example in few_shot_examples:
+        prompt += f"Text: {example['text']}\n"
+        prompt += f"Codes: {example['codes']}\n"
+        prompt += "Explanation: [Your explanation for the codes would go here]\n\n"
+    
+    prompt += f"Text: {text}\n"
+    prompt += "Codes and Explanation:"
+    
+    return prompt
+
+def parse_output(output: str) -> list:
+    """Parse the output to extract ICD-10 codes."""
+    lines = output.split('\n')
+    codes = []
+    for line in lines:
+        if line.startswith('Codes:'):
+            codes = [code.strip() for code in line.split(':')[1].split(',')]
+            break
+    return codes
+
+def generate_icd_codes(text: str, model_tuple, max_length: int = 256) -> list:
+    """Generate ICD-10 codes using a pre-trained LLM with sophisticated prompt engineering."""
     tokenizer, model = model_tuple
-    inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
+    prompt = generate_prompt(text)
+    
+    inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)
     
     with torch.no_grad():
         outputs = model.generate(
             inputs.input_ids,
             max_length=max_length,
-            num_return_sequences=3,  # Reduced from 5 to 3
-            num_beams=3,  # Reduced from 5 to 3
+            num_return_sequences=1,
+            num_beams=5,
             do_sample=True,
             temperature=0.7,
         )
     
-    decoded_outputs = [tokenizer.decode(output, skip_special_tokens=True) for output in outputs]
+    decoded_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
     
-    # Extract potential ICD-10 codes from the generated text
-    icd_codes = []
-    for output in decoded_outputs:
-        codes = [code.strip() for code in output.split() if code.strip().startswith('I') or code.strip().startswith('J')]
-        icd_codes.extend(codes)
-    
-    return list(set(icd_codes))  # Remove duplicates
+    return parse_output(decoded_output)

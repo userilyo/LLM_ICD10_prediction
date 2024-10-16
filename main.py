@@ -40,7 +40,7 @@ st.write(", ".join(true_codes[selected_index]))
 
 if st.button("Predict ICD-10 Codes"):
     with st.spinner("Generating predictions..."):
-        # Generate codes using LLM
+        # Generate codes using LLM with sophisticated prompt engineering
         generated_codes = generate_icd_codes(texts[selected_index], llm_model)
         
         # Verify codes using LSTM
@@ -61,6 +61,16 @@ if st.button("Predict ICD-10 Codes"):
     st.header("Explanation")
     st.write(explanation)
 
+    # Display LLM-generated codes and LSTM-verified codes
+    st.header("Prediction Process")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("LLM-Generated Codes")
+        st.write(", ".join(generated_codes))
+    with col2:
+        st.subheader("LSTM-Verified Codes")
+        st.write(", ".join(verified_codes))
+
     # Calculate and display metrics
     true_set = set(true_codes[selected_index])
     pred_set = set(final_codes)
@@ -75,4 +85,4 @@ if st.button("Predict ICD-10 Codes"):
     col3.metric("F1 Score", f"{f1_score:.2f}")
 
 st.sidebar.title("About")
-st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM, LSTM, and ensemble techniques.")
+st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification, and ensemble techniques.")
