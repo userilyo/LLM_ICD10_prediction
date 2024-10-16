@@ -17,19 +17,23 @@ class LSTMVerifier(nn.Module):
         out = self.fc(out[:, -1, :])
         return torch.sigmoid(out)
 
-# Initialize BERT tokenizer and model for feature extraction
-tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
-bert_model = AutoModel.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
+def load_lstm_model():
+    """Load BERT tokenizer and model for feature extraction, and initialize LSTM verifier"""
+    tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
+    bert_model = AutoModel.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
 
-# Initialize LSTM verifier
-input_size = 768  # BERT hidden size
-hidden_size = 128
-num_layers = 2
-num_classes = 1  # Binary classification (valid/invalid)
-lstm_verifier = LSTMVerifier(input_size, hidden_size, num_layers, num_classes)
+    input_size = 768  # BERT hidden size
+    hidden_size = 64  # Reduced from 128
+    num_layers = 1  # Reduced from 2
+    num_classes = 1  # Binary classification (valid/invalid)
+    lstm_verifier = LSTMVerifier(input_size, hidden_size, num_layers, num_classes)
 
-def verify_icd_codes(text: str, icd_codes: list) -> list:
+    return tokenizer, bert_model, lstm_verifier
+
+def verify_icd_codes(text: str, icd_codes: list, model_tuple) -> list:
     """Verify ICD-10 codes using LSTM-based verification."""
+    tokenizer, bert_model, lstm_verifier = model_tuple
+    
     # Tokenize and encode the input text
     inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True, padding=True)
     

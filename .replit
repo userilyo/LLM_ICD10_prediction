@@ -29,3 +29,7 @@ waitForPort = 5000
 
 [deployment]
 run = ["sh", "-c", "streamlit run main.py --server.port 5000"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80

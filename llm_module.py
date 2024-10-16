@@ -1,21 +1,24 @@
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
-# Load pre-trained model and tokenizer
-model_name = "facebook/bart-large-cnn"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+def load_llm_model():
+    """Load a smaller pre-trained model for ICD code generation."""
+    model_name = "facebook/bart-base"  # Using a smaller model
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    return tokenizer, model
 
-def generate_icd_codes(text: str, max_length: int = 128) -> list:
+def generate_icd_codes(text: str, model_tuple, max_length: int = 128) -> list:
     """Generate ICD-10 codes using a pre-trained LLM."""
+    tokenizer, model = model_tuple
     inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
     
     with torch.no_grad():
         outputs = model.generate(
             inputs.input_ids,
             max_length=max_length,
-            num_return_sequences=5,
-            num_beams=5,
+            num_return_sequences=3,  # Reduced from 5 to 3
+            num_beams=3,  # Reduced from 5 to 3
             do_sample=True,
             temperature=0.7,
         )
