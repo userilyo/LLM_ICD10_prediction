@@ -34,9 +34,9 @@ def load_lstm_model():
     tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
     bert_model = AutoModel.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
 
-    input_size = 768  # BERT hidden size
-    hidden_size = 128  # Increased from 64
-    num_layers = 2  # Increased from 1
+    input_size = 768 * 2  # BERT hidden size * 2 (text + code)
+    hidden_size = 128
+    num_layers = 2
     num_classes = 1  # Binary classification (valid/invalid)
     lstm_verifier = LSTMVerifier(input_size, hidden_size, num_layers, num_classes)
 
@@ -58,11 +58,20 @@ def verify_icd_codes(text: str, icd_codes: list, model_tuple) -> list:
     verified_codes = []
     attention_weights_list = []
     for code in icd_codes:
-        # Combine text embeddings with code embedding (simple concatenation)
-        code_embedding = tokenizer.encode(code, return_tensors="pt")
-        code_outputs = bert_model(code_embedding)
-        code_embedding = code_outputs.last_hidden_state.mean(dim=1)
-        combined_embedding = torch.cat([embeddings, code_embedding.expand(embeddings.size(0), -1)], dim=1)
+        # Get code embedding
+        code_inputs = tokenizer(code, return_tensors="pt", max_length=512, truncation=True, padding=True)
+        with torch.no_grad():
+            code_outputs = bert_model(**code_inputs)
+            code_embedding = code_outputs.last_hidden_state
+        
+        # Ensure code_embedding has the same sequence length as embeddings
+        if code_embedding.size(1) < embeddings.size(1):
+            code_embedding = torch.cat([code_embedding, torch.zeros(1, embeddings.size(1) - code_embedding.size(1), 768)], dim=1)
+        elif code_embedding.size(1) > embeddings.size(1):
+            code_embedding = code_embedding[:, :embeddings.size(1), :]
+        
+        # Concatenate text and code embeddings
+        combined_embedding = torch.cat([embeddings, code_embedding], dim=2)
         
         # Verify using LSTM with attention
         with torch.no_grad():
