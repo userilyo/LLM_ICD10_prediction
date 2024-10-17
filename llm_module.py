@@ -1,16 +1,23 @@
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def load_llm_model():
     """Load a smaller pre-trained model for ICD code generation."""
     model_name = "facebook/bart-base"  # Using a smaller model
+    logger.info(f"Loading model: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    logger.info("Model loaded successfully")
     return tokenizer, model
 
 def generate_prompt(text: str) -> str:
     """Generate a sophisticated prompt for ICD-10 code prediction."""
-    print("Generating sophisticated prompt...")
+    logger.info("Generating sophisticated prompt...")
     few_shot_examples = [
         {
             "text": "Patient with chest pain and shortness of breath. ECG shows ST-segment elevation.",
@@ -58,30 +65,39 @@ def generate_prompt(text: str) -> str:
     prompt += "4. Any relevant coding guidelines or conventions applied\n"
     prompt += "5. Alternative codes considered (if applicable)\n"
     
-    print("Sophisticated prompt generated.")
+    logger.info("Sophisticated prompt generated.")
     return prompt
 
 def parse_output(output: str) -> list:
     """Parse the output to extract ICD-10 codes."""
-    print("Parsing LLM output...")
+    logger.info("Parsing LLM output...")
     lines = output.split('\n')
     codes = []
+    current_code = None
     for line in lines:
         if line.strip().startswith('ICD-10 code:'):
-            code = line.split(':')[1].strip()
-            codes.append(code)
-    print(f"Parsed codes: {codes}")
+            if current_code:
+                codes.append(current_code)
+            current_code = line.split(':')[1].strip()
+        elif line.strip().startswith('Code description:'):
+            if current_code:
+                codes.append(current_code)
+                current_code = None
+    if current_code:
+        codes.append(current_code)
+    logger.info(f"Parsed codes: {codes}")
     return codes
 
 def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> list:
     """Generate ICD-10 codes using a pre-trained LLM with sophisticated prompt engineering."""
-    print("Generating ICD codes...")
+    logger.info("Generating ICD codes...")
     tokenizer, model = model_tuple
     prompt = generate_prompt(text)
     
+    logger.info("Tokenizing input...")
     inputs = tokenizer(prompt, return_tensors="pt", max_length=1024, truncation=True)
     
-    print("Running LLM inference...")
+    logger.info("Running LLM inference...")
     with torch.no_grad():
         outputs = model.generate(
             inputs.input_ids,
@@ -98,6 +114,8 @@ def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> list:
         )
     
     decoded_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    print("LLM inference complete.")
+    logger.info("LLM inference complete.")
+    logger.info(f"Raw LLM output: {decoded_output}")
     
-    return parse_output(decoded_output)
+    codes = parse_output(decoded_output)
+    return codes

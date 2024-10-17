@@ -6,43 +6,48 @@ from lstm_module import load_lstm_model, verify_icd_codes
 from icd_search import hierarchical_search
 from ensemble import ensemble_prediction
 from explainability import explain_prediction
+import logging
 
-print("Starting app...")
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+logger.info("Starting app...")
 
 # Load models
 @st.cache_resource
 def load_models():
-    print("Loading models...")
+    logger.info("Loading models...")
     llm_model = load_llm_model()
     lstm_model = load_lstm_model()
-    print("Models loaded successfully")
+    logger.info("Models loaded successfully")
     return llm_model, lstm_model
 
 # Load and prepare MIMIC-III data
 @st.cache_data
 def load_data():
-    print("Loading MIMIC-III data...")
+    logger.info("Loading MIMIC-III data...")
     data = load_and_prepare_mimic_data('data/mimic_iii_sample.csv')
-    print("MIMIC-III data loaded successfully")
+    logger.info("MIMIC-III data loaded successfully")
     return data
 
-print("Setting page config...")
+logger.info("Setting page config...")
 st.set_page_config(page_title="ICD-10 Code Prediction App", layout="wide")
 
-print("Setting title...")
+logger.info("Setting title...")
 st.title("ICD-10 Code Prediction App")
 
-print("Loading models and data...")
+logger.info("Loading models and data...")
 # Load models and data
 llm_model, lstm_model = load_models()
 mimic_data, all_icd_codes, texts, true_codes = load_data()
 
-print("Setting up sidebar...")
+logger.info("Setting up sidebar...")
 # Sidebar for data selection
 st.sidebar.title("Data Selection")
 selected_index = st.sidebar.selectbox("Select a medical case:", range(len(texts)), format_func=lambda i: f"Case {i+1}")
 
-print("Displaying main content...")
+logger.info("Displaying main content...")
 # Main content
 st.header("Medical Case")
 st.write(texts[selected_index])
@@ -50,31 +55,31 @@ st.write(texts[selected_index])
 st.header("True ICD-10 Codes")
 st.write(", ".join(true_codes[selected_index]))
 
-print("Setting up prediction button...")
+logger.info("Setting up prediction button...")
 if st.button("Predict ICD-10 Codes"):
-    print("Prediction button clicked...")
+    logger.info("Prediction button clicked...")
     with st.spinner("Generating predictions..."):
         # Generate codes using LLM with sophisticated prompt engineering
         generated_codes = generate_icd_codes(texts[selected_index], llm_model)
-        print(f"Generated codes: {generated_codes}")
+        logger.info(f"Generated codes: {generated_codes}")
         
         # Verify codes using LSTM
         verified_codes = verify_icd_codes(texts[selected_index], generated_codes, lstm_model)
-        print(f"Verified codes: {verified_codes}")
+        logger.info(f"Verified codes: {verified_codes}")
         
         # Perform hierarchical search
         hierarchical_codes = hierarchical_search(verified_codes)
-        print(f"Hierarchical codes: {hierarchical_codes}")
+        logger.info(f"Hierarchical codes: {hierarchical_codes}")
         
         # Ensemble prediction
         final_codes = ensemble_prediction(verified_codes, hierarchical_codes)
-        print(f"Final codes: {final_codes}")
+        logger.info(f"Final codes: {final_codes}")
         
         # Generate explanation
         explanation = explain_prediction(texts[selected_index], final_codes)
-        print("Explanation generated")
+        logger.info("Explanation generated")
 
-    print("Displaying results...")
+    logger.info("Displaying results...")
     st.header("Predicted ICD-10 Codes")
     st.write(", ".join(final_codes))
 
@@ -104,8 +109,8 @@ if st.button("Predict ICD-10 Codes"):
     col2.metric("Recall", f"{recall:.2f}")
     col3.metric("F1 Score", f"{f1_score:.2f}")
 
-print("Setting up sidebar info...")
+logger.info("Setting up sidebar info...")
 st.sidebar.title("About")
 st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification, and ensemble techniques.")
 
-print("App setup complete.")
+logger.info("App setup complete.")
