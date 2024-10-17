@@ -15,14 +15,6 @@ author = "agent"
 task = "workflow.run"
 args = "Start Streamlit App"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Test LLM Module"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Test LSTM Module"
-
 [[workflows.workflow]]
 name = "Start Streamlit App"
 author = "agent"
@@ -34,28 +26,6 @@ agentRequireRestartOnSave = false
 task = "shell.exec"
 args = "streamlit run main.py --server.port 5000"
 waitForPort = 5000
-
-[[workflows.workflow]]
-name = "Test LLM Module"
-author = "agent"
-
-[workflows.workflow.metadata]
-agentRequireRestartOnSave = false
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 llm_module.py"
-
-[[workflows.workflow]]
-name = "Test LSTM Module"
-author = "agent"
-
-[workflows.workflow.metadata]
-agentRequireRestartOnSave = false
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python3 -c \"from lstm_module import load_lstm_model, verify_icd_codes; model_tuple = load_lstm_model(); result = verify_icd_codes('Patient with chest pain', ['I21.3', 'I25.10'], model_tuple); print(result)\""
 
 [deployment]
 run = ["sh", "-c", "streamlit run main.py --server.port 5000"]

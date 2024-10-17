@@ -11,7 +11,7 @@ except FileNotFoundError:
     warnings.warn("Traditional ML model file not found. Using a dummy RandomForestClassifier instead.", UserWarning)
     traditional_model = RandomForestClassifier(n_estimators=10, random_state=42)
 
-def ensemble_prediction(verified_codes: list, hierarchical_codes: list, gnn_probabilities: list) -> list:
+def ensemble_prediction(verified_codes: list, hierarchical_codes: list) -> list:
     """Combine predictions using ensemble techniques."""
     # Combine verified and hierarchical codes
     all_codes = list(set(verified_codes + hierarchical_codes))
@@ -33,16 +33,12 @@ def ensemble_prediction(verified_codes: list, hierarchical_codes: list, gnn_prob
         warnings.warn(f"Error in traditional model prediction: {str(e)}. Using default probabilities.", UserWarning)
         ml_predictions = np.full(len(all_codes), 0.5)  # Default to 0.5 probability for all codes
     
-    # Combine predictions (weighted averaging)
+    # Combine predictions (simple averaging)
     combined_predictions = []
     for i, code in enumerate(all_codes):
         llm_score = 1 if code in verified_codes else 0
         ml_score = ml_predictions[i] if i < len(ml_predictions) else 0.5
-        gnn_score = gnn_probabilities[i] if i < len(gnn_probabilities) else 0.5
-        
-        # Assign weights to different models (can be adjusted based on performance)
-        llm_weight, ml_weight, gnn_weight = 0.4, 0.3, 0.3
-        combined_score = (llm_score * llm_weight + ml_score * ml_weight + gnn_score * gnn_weight) / (llm_weight + ml_weight + gnn_weight)
+        combined_score = (llm_score + ml_score) / 2
         combined_predictions.append((code, combined_score))
     
     # Sort and filter predictions
