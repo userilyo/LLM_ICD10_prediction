@@ -15,6 +15,10 @@ author = "agent"
 task = "workflow.run"
 args = "Start Streamlit App"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Test LLM Module"
+
 [[workflows.workflow]]
 name = "Start Streamlit App"
 author = "agent"
@@ -26,6 +30,17 @@ agentRequireRestartOnSave = false
 task = "shell.exec"
 args = "streamlit run main.py --server.port 5000"
 waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Test LLM Module"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 llm_module.py"
 
 [deployment]
 run = ["sh", "-c", "streamlit run main.py --server.port 5000"]
