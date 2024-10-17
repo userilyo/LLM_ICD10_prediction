@@ -73,7 +73,7 @@ def parse_output(output: str) -> list:
     logger.info(f"Parsed codes: {codes}")
     return codes
 
-def generate_icd_codes(text: str, model_tuple, max_length: int = 1024, timeout: int = 30) -> list:
+def generate_icd_codes(text: str, model_tuple, max_length: int = 1024, num_return_sequences: int = 3, timeout: int = 30) -> list:
     """Generate ICD-10 codes using BioGPT model."""
     logger.info("Generating ICD codes...")
     tokenizer, model = model_tuple
@@ -91,7 +91,7 @@ def generate_icd_codes(text: str, model_tuple, max_length: int = 1024, timeout: 
             outputs = model.generate(
                 inputs.input_ids,
                 max_length=max_length,
-                num_return_sequences=1,
+                num_return_sequences=num_return_sequences,
                 do_sample=True,
                 temperature=0.7,
                 top_p=0.95,
@@ -101,16 +101,20 @@ def generate_icd_codes(text: str, model_tuple, max_length: int = 1024, timeout: 
                 num_beams=5,
             )
         
-        decoded_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        all_codes = []
+        for output in outputs:
+            decoded_output = tokenizer.decode(output, skip_special_tokens=True)
+            logger.debug(f"Raw LLM output: {decoded_output}")
+            codes = parse_output(decoded_output)
+            all_codes.extend(codes)
+        
         logger.info("LLM inference complete.")
-        logger.debug(f"Raw LLM output: {decoded_output}")
     except Exception as e:
         logger.error(f"Error during LLM inference: {str(e)}")
         return []
     
-    codes = parse_output(decoded_output)
     # Remove duplicate codes
-    unique_codes = list(dict.fromkeys(codes))
+    unique_codes = list(dict.fromkeys(all_codes))
     logger.info(f"Generated unique ICD-10 codes: {unique_codes}")
     return unique_codes
 
