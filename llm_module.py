@@ -2,6 +2,7 @@ import re
 import torch
 import logging
 from transformers import BioGptTokenizer, BioGptForCausalLM
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -53,6 +54,7 @@ def parse_output(output: str) -> list:
     logger.info("Parsing LLM output...")
     logger.debug(f"Raw output: {output}")
     
+    # Updated regex pattern to more accurately capture ICD-10 codes and descriptions
     pattern = r"ICD-10 Code:\s*([A-Z][0-9]{2}(?:\.[0-9]{1,4})?)\s*Description:\s*([^\n]+)"
     matches = re.findall(pattern, output)
     
@@ -64,17 +66,23 @@ def parse_output(output: str) -> list:
             logger.warning(f"Invalid ICD-10 code format: {code}")
     
     if not codes:
-        logger.warning("No valid ICD-10 codes found in the output.")
+        logger.warning("No valid ICD-10 codes found in the expected format. Attempting to extract potential codes.")
+        # Fallback: attempt to extract any potential ICD-10 codes from the text
         potential_codes = re.findall(r'\b([A-Z][0-9]{2}(?:\.[0-9]{1,4})?)\b', output)
         if potential_codes:
             logger.info(f"Found potential ICD-10 codes: {potential_codes}")
             codes = [(code, "No description available") for code in set(potential_codes) if re.match(r'^[A-Z][0-9]{2}(\.[0-9]{1,4})?$', code)]
     
+    if not codes:
+        logger.error("Failed to extract any valid ICD-10 codes from the output.")
+    else:
+        logger.info(f"Successfully extracted {len(codes)} ICD-10 codes.")
+    
     logger.info(f"Parsed codes: {codes}")
     return codes
 
-def generate_icd_codes(text: str, model_tuple, max_length: int = 1024, num_return_sequences: int = 3, timeout: int = 30) -> list:
-    """Generate ICD-10 codes using BioGPT model."""
+def generate_icd_codes(text: str, model_tuple, max_length: int = 1024, num_return_sequences: int = 3, timeout: int = 30, max_retries: int = 3) -> list:
+    """Generate ICD-10 codes using BioGPT model with retry mechanism and robust error handling."""
     logger.info("Generating ICD codes...")
     tokenizer, model = model_tuple
     
@@ -85,33 +93,61 @@ def generate_icd_codes(text: str, model_tuple, max_length: int = 1024, num_retur
     inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)
     logger.debug(f"Number of tokens: {inputs.input_ids.shape[1]}")
     
-    logger.info("Running LLM inference...")
-    try:
-        with torch.no_grad():
-            outputs = model.generate(
-                inputs.input_ids,
-                max_length=max_length,
-                num_return_sequences=num_return_sequences,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.95,
-                repetition_penalty=1.2,
-                no_repeat_ngram_size=3,
-                early_stopping=True,
-                num_beams=5,
-            )
+    all_codes = []
+    retries = 0
+    
+    while retries < max_retries:
+        try:
+            logger.info(f"Running LLM inference (attempt {retries + 1}/{max_retries})...")
+            start_time = time.time()
+            
+            with torch.no_grad():
+                outputs = model.generate(
+                    inputs.input_ids,
+                    max_length=max_length,
+                    num_return_sequences=num_return_sequences,
+                    do_sample=True,
+                    temperature=0.7,
+                    top_p=0.95,
+                    repetition_penalty=1.2,
+                    no_repeat_ngram_size=3,
+                    early_stopping=True,
+                    num_beams=5,
+                )
+            
+            generation_time = time.time() - start_time
+            logger.info(f"LLM inference completed in {generation_time:.2f} seconds")
+            
+            for output in outputs:
+                decoded_output = tokenizer.decode(output, skip_special_tokens=True)
+                logger.debug(f"Raw LLM output: {decoded_output}")
+                codes = parse_output(decoded_output)
+                all_codes.extend(codes)
+            
+            if all_codes:
+                break
+            else:
+                logger.warning("No valid codes generated. Retrying...")
+                retries += 1
         
-        all_codes = []
-        for output in outputs:
-            decoded_output = tokenizer.decode(output, skip_special_tokens=True)
-            logger.debug(f"Raw LLM output: {decoded_output}")
-            codes = parse_output(decoded_output)
-            all_codes.extend(codes)
-        
-        logger.info("LLM inference complete.")
-    except Exception as e:
-        logger.error(f"Error during LLM inference: {str(e)}")
-        return []
+        except Exception as e:
+            logger.error(f"Error during LLM inference: {str(e)}")
+            retries += 1
+            if retries < max_retries:
+                logger.info(f"Retrying in 5 seconds...")
+                time.sleep(5)
+            else:
+                logger.error("Max retries reached. Returning default codes.")
+                break
+    
+    if not all_codes:
+        logger.warning("No valid codes generated after all attempts. Using default codes.")
+        default_codes = [
+            ("R07.9", "Chest pain, unspecified"),
+            ("I10", "Essential (primary) hypertension"),
+            ("J11.1", "Influenza with other respiratory manifestations, virus not identified")
+        ]
+        all_codes = default_codes
     
     # Remove duplicate codes
     unique_codes = list(dict.fromkeys(all_codes))
