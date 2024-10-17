@@ -1,6 +1,7 @@
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 import logging
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -59,11 +60,11 @@ def generate_prompt(text: str) -> str:
     prompt += f"Text: {text}\n"
     prompt += "Codes and Explanations:\n"
     prompt += "For each code, provide the following information:\n"
-    prompt += "1. ICD-10 code\n"
-    prompt += "2. Code description\n"
-    prompt += "3. Detailed explanation of why this code was chosen\n"
-    prompt += "4. Any relevant coding guidelines or conventions applied\n"
-    prompt += "5. Alternative codes considered (if applicable)\n"
+    prompt += "1. ICD-10 code: [code]\n"
+    prompt += "2. Code description: [description]\n"
+    prompt += "3. Detailed explanation: [explanation]\n"
+    prompt += "4. Relevant coding guidelines: [guidelines]\n"
+    prompt += "5. Alternative codes considered: [alternatives]\n"
     
     logger.info("Sophisticated prompt generated.")
     return prompt
@@ -71,21 +72,7 @@ def generate_prompt(text: str) -> str:
 def parse_output(output: str) -> list:
     """Parse the output to extract ICD-10 codes."""
     logger.info("Parsing LLM output...")
-    lines = output.split('\n')
-    codes = []
-    current_code = None
-    for line in lines:
-        logger.info(f"Processing line: {line}")
-        if line.strip().startswith('ICD-10 code:'):
-            if current_code:
-                codes.append(current_code)
-            current_code = line.split(':')[1].strip()
-        elif line.strip().startswith('Code description:'):
-            if current_code:
-                codes.append(current_code)
-                current_code = None
-    if current_code:
-        codes.append(current_code)
+    codes = re.findall(r"ICD-10 code: ([A-Z0-9.]+)", output)
     
     if not codes:
         logger.warning("No ICD-10 codes found in the output.")
@@ -128,3 +115,15 @@ def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> list:
     
     codes = parse_output(decoded_output)
     return codes
+
+# Test function
+def test_generate_icd_codes():
+    logger.info("Testing generate_icd_codes function...")
+    test_text = "Patient admitted with severe chest pain and shortness of breath. ECG showed ST-segment elevation. Diagnosed with acute myocardial infarction. Treated with thrombolysis and anticoagulation therapy."
+    model_tuple = load_llm_model()
+    codes = generate_icd_codes(test_text, model_tuple)
+    logger.info(f"Test result - Generated codes: {codes}")
+    return codes
+
+if __name__ == "__main__":
+    test_generate_icd_codes()
