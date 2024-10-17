@@ -8,6 +8,7 @@ from lstm_module import load_lstm_model, verify_icd_codes
 from icd_search import hierarchical_search
 from ensemble import ensemble_prediction
 from explainability import explain_prediction
+from gnn_module import load_gnn_model, gnn_prediction
 import logging
 
 # Set up logging
@@ -22,8 +23,9 @@ def load_models():
     logger.info("Loading models...")
     llm_model = load_llm_model()
     lstm_model = load_lstm_model()
+    gnn_model = load_gnn_model(num_features=len(all_icd_codes), hidden_channels=64, num_classes=len(all_icd_codes))
     logger.info("Models loaded successfully")
-    return llm_model, lstm_model
+    return llm_model, lstm_model, gnn_model
 
 # Load and prepare MIMIC-III data
 @st.cache_data
@@ -41,8 +43,8 @@ st.title("ICD-10 Code Prediction App")
 
 logger.info("Loading models and data...")
 # Load models and data
-llm_model, lstm_model = load_models()
 mimic_data, all_icd_codes, texts, true_codes = load_data()
+llm_model, lstm_model, gnn_model = load_models()
 
 logger.info("Setting up sidebar...")
 # Sidebar for data selection
@@ -73,8 +75,12 @@ if st.button("Predict ICD-10 Codes"):
         hierarchical_codes = hierarchical_search(verified_codes)
         logger.info(f"Hierarchical codes: {hierarchical_codes}")
         
+        # GNN prediction
+        gnn_probabilities = gnn_prediction(verified_codes, all_icd_codes, gnn_model)
+        logger.info(f"GNN probabilities generated")
+        
         # Ensemble prediction
-        final_codes = ensemble_prediction(verified_codes, hierarchical_codes)
+        final_codes = ensemble_prediction(verified_codes, hierarchical_codes, gnn_probabilities)
         logger.info(f"Final codes: {final_codes}")
         
         # Generate explanation
@@ -88,15 +94,19 @@ if st.button("Predict ICD-10 Codes"):
     st.header("Explanation")
     st.write(explanation)
 
-    # Display LLM-generated codes and LSTM-verified codes
+    # Display LLM-generated codes, LSTM-verified codes, and GNN predictions
     st.header("Prediction Process")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.subheader("LLM-Generated Codes")
         st.write(", ".join(generated_codes))
     with col2:
         st.subheader("LSTM-Verified Codes")
         st.write(", ".join(verified_codes))
+    with col3:
+        st.subheader("Top GNN Predictions")
+        top_gnn_codes = [all_icd_codes[i] for i in sorted(range(len(gnn_probabilities)), key=lambda i: gnn_probabilities[i], reverse=True)[:5]]
+        st.write(", ".join(top_gnn_codes))
 
     # Visualize attention weights
     st.header("Attention Visualization")
@@ -107,6 +117,19 @@ if st.button("Predict ICD-10 Codes"):
         ax.set_xlabel("Token Position")
         ax.set_ylabel("Attention")
         st.pyplot(fig)
+
+    # Visualize GNN predictions
+    st.header("GNN Prediction Visualization")
+    fig, ax = plt.subplots(figsize=(12, 6))
+    top_n = 10
+    top_indices = sorted(range(len(gnn_probabilities)), key=lambda i: gnn_probabilities[i], reverse=True)[:top_n]
+    top_codes = [all_icd_codes[i] for i in top_indices]
+    top_probs = [gnn_probabilities[i] for i in top_indices]
+    sns.barplot(x=top_probs, y=top_codes, ax=ax)
+    ax.set_title("Top GNN Predictions")
+    ax.set_xlabel("Probability")
+    ax.set_ylabel("ICD-10 Code")
+    st.pyplot(fig)
 
     # Calculate and display metrics
     true_set = set(true_codes[selected_index])
@@ -123,6 +146,6 @@ if st.button("Predict ICD-10 Codes"):
 
 logger.info("Setting up sidebar info...")
 st.sidebar.title("About")
-st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification with attention mechanisms, and ensemble techniques.")
+st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification with attention mechanisms, GNN for code relationships, and ensemble techniques.")
 
 logger.info("App setup complete.")
