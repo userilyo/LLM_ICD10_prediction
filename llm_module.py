@@ -75,6 +75,7 @@ def parse_output(output: str) -> list:
     codes = []
     current_code = None
     for line in lines:
+        logger.info(f"Processing line: {line}")
         if line.strip().startswith('ICD-10 code:'):
             if current_code:
                 codes.append(current_code)
@@ -85,17 +86,25 @@ def parse_output(output: str) -> list:
                 current_code = None
     if current_code:
         codes.append(current_code)
-    logger.info(f"Parsed codes: {codes}")
+    
+    if not codes:
+        logger.warning("No ICD-10 codes found in the output.")
+    else:
+        logger.info(f"Parsed codes: {codes}")
     return codes
 
 def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> list:
     """Generate ICD-10 codes using a pre-trained LLM with sophisticated prompt engineering."""
     logger.info("Generating ICD codes...")
     tokenizer, model = model_tuple
+    
+    logger.info(f"Input text: {text}")
     prompt = generate_prompt(text)
+    logger.info(f"Generated prompt: {prompt}")
     
     logger.info("Tokenizing input...")
     inputs = tokenizer(prompt, return_tensors="pt", max_length=1024, truncation=True)
+    logger.info(f"Number of tokens: {inputs.input_ids.shape[1]}")
     
     logger.info("Running LLM inference...")
     with torch.no_grad():
