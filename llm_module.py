@@ -58,14 +58,17 @@ def parse_output(output: str) -> list:
     
     codes = []
     for code, description in matches:
-        codes.append((code.strip(), description.strip()))
+        if re.match(r'^[A-Z][0-9]{2}(\.[0-9]{1,4})?$', code):
+            codes.append((code.strip(), description.strip()))
+        else:
+            logger.warning(f"Invalid ICD-10 code format: {code}")
     
     if not codes:
         logger.warning("No valid ICD-10 codes found in the output.")
         potential_codes = re.findall(r'\b([A-Z][0-9]{2}(?:\.[0-9]{1,4})?)\b', output)
         if potential_codes:
             logger.info(f"Found potential ICD-10 codes: {potential_codes}")
-            codes = [(code, "No description available") for code in set(potential_codes)]
+            codes = [(code, "No description available") for code in set(potential_codes) if re.match(r'^[A-Z][0-9]{2}(\.[0-9]{1,4})?$', code)]
     
     logger.info(f"Parsed codes: {codes}")
     return codes

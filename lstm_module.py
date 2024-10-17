@@ -1,6 +1,11 @@
 import torch
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModel
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class AttentionLayer(nn.Module):
     def __init__(self, hidden_size):
@@ -49,36 +54,63 @@ def verify_icd_codes(text: str, icd_codes: list, model_tuple) -> list:
     # Tokenize and encode the input text
     inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True, padding=True)
     
-    # Get BERT embeddings
-    with torch.no_grad():
-        outputs = bert_model(**inputs)
-        embeddings = outputs.last_hidden_state
-    
+    try:
+        # Get BERT embeddings
+        with torch.no_grad():
+            outputs = bert_model(**inputs)
+            embeddings = outputs.last_hidden_state
+    except Exception as e:
+        logger.error(f"Error getting BERT embeddings for text: {str(e)}")
+        return [], []
+
     # Verify each ICD code
     verified_codes = []
     attention_weights_list = []
     for code in icd_codes:
-        # Get code embedding
-        code_inputs = tokenizer(code, return_tensors="pt", max_length=512, truncation=True, padding=True)
-        with torch.no_grad():
-            code_outputs = bert_model(**code_inputs)
-            code_embedding = code_outputs.last_hidden_state
+        try:
+            # Get code embedding
+            code_inputs = tokenizer(code, return_tensors="pt", max_length=512, truncation=True, padding=True)
+            with torch.no_grad():
+                code_outputs = bert_model(**code_inputs)
+                if hasattr(code_outputs, 'last_hidden_state'):
+                    code_embedding = code_outputs.last_hidden_state
+                else:
+                    code_embedding = code_outputs[0]
+            
+            # Ensure code_embedding has the correct shape
+            if code_embedding.size(1) != embeddings.size(1):
+                logger.warning(f"Mismatch in embedding sizes. Adjusting code embedding size.")
+                if code_embedding.size(1) < embeddings.size(1):
+                    code_embedding = torch.cat([code_embedding, torch.zeros(1, embeddings.size(1) - code_embedding.size(1), 768)], dim=1)
+                else:
+                    code_embedding = code_embedding[:, :embeddings.size(1), :]
+            
+            # Concatenate text and code embeddings
+            combined_embedding = torch.cat([embeddings, code_embedding], dim=2)
+            
+            # Verify using LSTM with attention
+            with torch.no_grad():
+                prediction, attention_weights = lstm_verifier(combined_embedding)
+            
+            if prediction.item() > 0.5:  # Threshold for binary classification
+                verified_codes.append(code)
+                attention_weights_list.append(attention_weights)
         
-        # Ensure code_embedding has the same sequence length as embeddings
-        if code_embedding.size(1) < embeddings.size(1):
-            code_embedding = torch.cat([code_embedding, torch.zeros(1, embeddings.size(1) - code_embedding.size(1), 768)], dim=1)
-        elif code_embedding.size(1) > embeddings.size(1):
-            code_embedding = code_embedding[:, :embeddings.size(1), :]
-        
-        # Concatenate text and code embeddings
-        combined_embedding = torch.cat([embeddings, code_embedding], dim=2)
-        
-        # Verify using LSTM with attention
-        with torch.no_grad():
-            prediction, attention_weights = lstm_verifier(combined_embedding)
-        
-        if prediction.item() > 0.5:  # Threshold for binary classification
-            verified_codes.append(code)
-            attention_weights_list.append(attention_weights)
+        except Exception as e:
+            logger.error(f"Error processing ICD code {code}: {str(e)}")
     
     return verified_codes, attention_weights_list
+
+# Test function
+def test_verify_icd_codes():
+    logger.info("Testing verify_icd_codes function...")
+    test_text = "Patient with chest pain"
+    test_codes = ['I21.3', 'I25.10']
+    model_tuple = load_lstm_model()
+    verified_codes, attention_weights = verify_icd_codes(test_text, test_codes, model_tuple)
+    logger.info(f"Test result - Verified codes: {verified_codes}")
+    logger.info(f"Test result - Attention weights shape: {[w.shape for w in attention_weights]}")
+    return verified_codes, attention_weights
+
+if __name__ == "__main__":
+    test_verify_icd_codes()
