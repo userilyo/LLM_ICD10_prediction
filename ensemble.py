@@ -23,17 +23,21 @@ def ensemble_prediction(verified_codes: list, hierarchical_codes: list) -> list:
             feature_vector[i] = 1
     
     # Get predictions from traditional ML model
-    if isinstance(traditional_model, RandomForestClassifier) and not traditional_model.n_features_in_:
-        # If using dummy model, fit it with the current feature vector
-        traditional_model.fit([feature_vector], [1])  # Dummy target
-    
-    ml_predictions = traditional_model.predict_proba([feature_vector])[0]
+    try:
+        if not hasattr(traditional_model, 'classes_'):
+            # If the model hasn't been fitted, fit it with a dummy sample
+            traditional_model.fit([feature_vector], [1])  # Dummy target
+        
+        ml_predictions = traditional_model.predict_proba([feature_vector])[0]
+    except Exception as e:
+        warnings.warn(f"Error in traditional model prediction: {str(e)}. Using default probabilities.", UserWarning)
+        ml_predictions = np.full(len(all_codes), 0.5)  # Default to 0.5 probability for all codes
     
     # Combine predictions (simple averaging)
     combined_predictions = []
     for i, code in enumerate(all_codes):
         llm_score = 1 if code in verified_codes else 0
-        ml_score = ml_predictions[i] if len(ml_predictions) > i else 0.5  # Use 0.5 if ml_score is not available
+        ml_score = ml_predictions[i] if i < len(ml_predictions) else 0.5
         combined_score = (llm_score + ml_score) / 2
         combined_predictions.append((code, combined_score))
     

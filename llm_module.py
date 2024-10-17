@@ -37,7 +37,9 @@ def generate_prompt(text: str) -> str:
     prompt += "5. If the information is insufficient for a specific code, use a more general code.\n"
     prompt += "6. Provide a detailed explanation for each assigned code, including your reasoning process.\n"
     prompt += "7. List codes in order of relevance to the primary condition or reason for visit.\n"
-    prompt += "8. Consider potential comorbidities and complications.\n\n"
+    prompt += "8. Consider potential comorbidities and complications.\n"
+    prompt += "9. Be aware of coding guidelines and conventions, such as combination codes and sequencing rules.\n"
+    prompt += "10. If applicable, include external cause codes (V00-Y99) for injuries or adverse effects.\n\n"
     
     prompt += "Here are some examples to guide your thought process:\n\n"
     
@@ -48,7 +50,13 @@ def generate_prompt(text: str) -> str:
     
     prompt += "Now, analyze the following medical text and provide ICD-10 codes with detailed explanations:\n\n"
     prompt += f"Text: {text}\n"
-    prompt += "Codes and Explanations:"
+    prompt += "Codes and Explanations:\n"
+    prompt += "For each code, provide the following information:\n"
+    prompt += "1. ICD-10 code\n"
+    prompt += "2. Code description\n"
+    prompt += "3. Detailed explanation of why this code was chosen\n"
+    prompt += "4. Any relevant coding guidelines or conventions applied\n"
+    prompt += "5. Alternative codes considered (if applicable)\n"
     
     print("Sophisticated prompt generated.")
     return prompt
@@ -59,13 +67,13 @@ def parse_output(output: str) -> list:
     lines = output.split('\n')
     codes = []
     for line in lines:
-        if line.startswith('Codes:'):
-            codes = [code.strip() for code in line.split(':')[1].split(',')]
-            break
+        if line.strip().startswith('ICD-10 code:'):
+            code = line.split(':')[1].strip()
+            codes.append(code)
     print(f"Parsed codes: {codes}")
     return codes
 
-def generate_icd_codes(text: str, model_tuple, max_length: int = 512) -> list:
+def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> list:
     """Generate ICD-10 codes using a pre-trained LLM with sophisticated prompt engineering."""
     print("Generating ICD codes...")
     tokenizer, model = model_tuple
@@ -84,6 +92,9 @@ def generate_icd_codes(text: str, model_tuple, max_length: int = 512) -> list:
             temperature=0.7,
             top_k=50,
             top_p=0.95,
+            repetition_penalty=1.2,
+            length_penalty=1.0,
+            no_repeat_ngram_size=3,
         )
     
     decoded_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
