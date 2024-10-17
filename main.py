@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from data_processing import load_and_prepare_mimic_data
 from llm_module import load_llm_model, generate_icd_codes
 from lstm_module import load_lstm_model, verify_icd_codes
@@ -63,8 +65,8 @@ if st.button("Predict ICD-10 Codes"):
         generated_codes = generate_icd_codes(texts[selected_index], llm_model)
         logger.info(f"Generated codes: {generated_codes}")
         
-        # Verify codes using LSTM
-        verified_codes = verify_icd_codes(texts[selected_index], generated_codes, lstm_model)
+        # Verify codes using LSTM with attention
+        verified_codes, attention_weights = verify_icd_codes(texts[selected_index], generated_codes, lstm_model)
         logger.info(f"Verified codes: {verified_codes}")
         
         # Perform hierarchical search
@@ -96,6 +98,16 @@ if st.button("Predict ICD-10 Codes"):
         st.subheader("LSTM-Verified Codes")
         st.write(", ".join(verified_codes))
 
+    # Visualize attention weights
+    st.header("Attention Visualization")
+    for i, (code, weights) in enumerate(zip(verified_codes, attention_weights)):
+        fig, ax = plt.subplots(figsize=(10, 2))
+        sns.heatmap(weights.detach().numpy(), cmap="YlOrRd", ax=ax, cbar=False)
+        ax.set_title(f"Attention Weights for {code}")
+        ax.set_xlabel("Token Position")
+        ax.set_ylabel("Attention")
+        st.pyplot(fig)
+
     # Calculate and display metrics
     true_set = set(true_codes[selected_index])
     pred_set = set(final_codes)
@@ -111,6 +123,6 @@ if st.button("Predict ICD-10 Codes"):
 
 logger.info("Setting up sidebar info...")
 st.sidebar.title("About")
-st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification, and ensemble techniques.")
+st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification with attention mechanisms, and ensemble techniques.")
 
 logger.info("App setup complete.")
