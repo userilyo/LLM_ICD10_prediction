@@ -7,9 +7,10 @@ from llm_module import load_llm_model, generate_icd_codes
 from lstm_module import load_lstm_model, verify_icd_codes
 from icd_search import hierarchical_search
 from ensemble import ensemble_prediction
-from explainability import explain_prediction
+from explainability import explain_prediction_with_importance
 from gnn_module import load_gnn_model, gnn_prediction
 import logging
+import numpy as np
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -80,18 +81,21 @@ if st.button("Predict ICD-10 Codes"):
         logger.info(f"GNN probabilities generated")
         
         # Ensemble prediction
-        final_codes = ensemble_prediction(verified_codes, hierarchical_codes, gnn_probabilities)
+        final_codes, final_probabilities = ensemble_prediction(verified_codes, hierarchical_codes, gnn_probabilities)
         logger.info(f"Final codes: {final_codes}")
         
-        # Generate explanation
-        explanation = explain_prediction(texts[selected_index], final_codes)
-        logger.info("Explanation generated")
+        # Generate mock features for importance calculation (replace with actual features in a real scenario)
+        mock_features = np.random.rand(10)  # 10 mock features
+        
+        # Generate comprehensive explanation
+        explanation = explain_prediction_with_importance(texts[selected_index], final_codes, final_probabilities, mock_features)
+        logger.info("Comprehensive explanation generated")
 
     logger.info("Displaying results...")
     st.header("Predicted ICD-10 Codes")
     st.write(", ".join(final_codes))
 
-    st.header("Explanation")
+    st.header("Comprehensive Explanation")
     st.write(explanation)
 
     # Display LLM-generated codes, LSTM-verified codes, and GNN predictions
@@ -146,6 +150,6 @@ if st.button("Predict ICD-10 Codes"):
 
 logger.info("Setting up sidebar info...")
 st.sidebar.title("About")
-st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification with attention mechanisms, GNN for code relationships, and ensemble techniques.")
+st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification with attention mechanisms, GNN for code relationships, and ensemble techniques. It includes comprehensive explanations with feature importance calculations.")
 
 logger.info("App setup complete.")
