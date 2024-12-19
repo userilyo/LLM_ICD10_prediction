@@ -40,7 +40,7 @@ def load_data():
         return pd.DataFrame(), [], [], []  # Return empty data structures
 
 logger.info("Setting page config...")
-st.set_page_config(page_title="ICD-10 Code Prediction App", layout="wide")
+st.set_page_config(page_title="LLM ICD-10 Code Prediction", layout="wide")
 
 logger.info("Setting title...")
 st.title("ICD-10 Code Prediction App")
