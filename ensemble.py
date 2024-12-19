@@ -11,13 +11,21 @@ except FileNotFoundError:
     warnings.warn("Traditional ML model file not found. Using a dummy RandomForestClassifier instead.", UserWarning)
     traditional_model = RandomForestClassifier(n_estimators=10, random_state=42)
 
-def ensemble_prediction(verified_codes: list, hierarchical_codes: list) -> list:
+def ensemble_prediction(verified_codes_with_conf: list, hierarchical_codes: list) -> list:
     """Combine predictions using ensemble techniques."""
+    # Extract verified codes and their confidences
+    verified_codes = [code for code, _ in verified_codes_with_conf]
+    confidences = [conf for _, conf in verified_codes_with_conf]
+    
+    # Ensure we have at least one code to process
+    if not verified_codes and not hierarchical_codes:
+        return []
+        
     # Combine verified and hierarchical codes
     all_codes = list(set(verified_codes + hierarchical_codes))
     
     # Create feature vector (simple binary representation)
-    feature_vector = np.zeros(len(all_codes))
+    feature_vector = np.zeros(max(1, len(all_codes)))  # Ensure at least one feature
     for i, code in enumerate(all_codes):
         if code in verified_codes:
             feature_vector[i] = 1

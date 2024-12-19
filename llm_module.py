@@ -9,11 +9,17 @@ logger = logging.getLogger(__name__)
 def load_llm_model():
     """Load a smaller pre-trained model for ICD code generation."""
     try:
-        model_name = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"  # Medical domain model
+        model_name = "facebook/bart-base"  # Using BART for text generation
         logger.info(f"Loading model: {model_name}")
         tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=512)
-        model = AutoModelForSeq2SeqLM.from_pretrained("facebook/bart-base")  # Keep BART for generation capabilities
-        logger.info("Model loaded successfully")
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        
+        # Move model to appropriate device
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        model.eval()  # Set to evaluation mode
+        
+        logger.info(f"Model loaded successfully on device: {device}")
         return tokenizer, model
     except Exception as e:
         logger.error(f"Error loading LLM model: {str(e)}")
@@ -143,16 +149,16 @@ def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> tuple:
                 output_scores=True,  # Get prediction scores
             )
         
-        # Process multiple sequences and their scores
+        # Process sequences and compute scores
         sequences = outputs.sequences
-        scores = torch.stack(outputs.sequences_scores)
+        scores = outputs.sequences_scores.unsqueeze(-1) if hasattr(outputs, 'sequences_scores') else torch.ones(len(sequences), 1)
         
         # Decode each sequence and get codes with confidence
         codes_with_confidence = []
         for seq, score in zip(sequences, scores):
             decoded_output = tokenizer.decode(seq, skip_special_tokens=True)
             codes = parse_output(decoded_output)
-            confidence = torch.sigmoid(score).item()  # Convert to probability
+            confidence = float(torch.sigmoid(score).item())  # Convert to float probability
             codes_with_confidence.extend([(code, confidence) for code in codes])
         
         # Deduplicate and sort by confidence
