@@ -43,7 +43,7 @@ logger.info("Setting page config...")
 st.set_page_config(page_title="LLM ICD-10 Code Prediction", layout="wide")
 
 logger.info("Setting title...")
-st.title("ICD-10 Code Prediction App")
+st.title("LLM ICD-10 Code Prediction")
 
 logger.info("Loading models and data...")
 # Load models and data
@@ -53,11 +53,11 @@ mimic_data, all_icd_codes, texts, true_codes = load_data()
 logger.info("Setting up sidebar...")
 # Sidebar for data selection
 st.sidebar.title("Data Selection")
-selected_index = st.sidebar.selectbox("Select a medical case:", range(len(texts)), format_func=lambda i: f"Case {i+1}")
+selected_index = st.sidebar.selectbox("Select a discharge note:", range(len(texts)), format_func=lambda i: f"Case {i+1}")
 
 logger.info("Displaying main content...")
 # Main content
-st.header("Medical Case")
+st.header("Discharge Note")
 st.write(texts[selected_index])
 
 st.header("True ICD-10 Codes")
@@ -125,6 +125,6 @@ if st.button("Predict ICD-10 Codes"):
 
 logger.info("Setting up sidebar info...")
 st.sidebar.title("About")
-st.sidebar.info("This app predicts ICD-10 codes based on medical text using a combination of LLM with sophisticated prompt engineering, LSTM verification, and ensemble techniques.")
+st.sidebar.info("This PoC predicts ICD-10 codes based on medical text present in discharge notes using a combination of LLM with sophisticated prompt engineering, LSTM verification, and ensemble techniques.")
 
 logger.info("App setup complete.")
