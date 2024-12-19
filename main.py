@@ -67,21 +67,27 @@ logger.info("Setting up prediction button...")
 if st.button("Predict ICD-10 Codes"):
     logger.info("Prediction button clicked...")
     with st.spinner("Generating predictions..."):
-        # Generate codes using LLM with sophisticated prompt engineering
-        generated_codes = generate_icd_codes(texts[selected_index], llm_model)
-        logger.info(f"Generated codes: {generated_codes}")
+        # Generate codes using LLM with confidence scores
+        generated_codes_with_conf = generate_icd_codes(texts[selected_index], llm_model)
+        generated_codes = [code for code, _ in generated_codes_with_conf]
+        generated_confidences = [conf for _, conf in generated_codes_with_conf]
+        logger.info(f"Generated codes with confidence: {generated_codes_with_conf}")
         
         # Verify codes using LSTM
-        verified_codes = verify_icd_codes(texts[selected_index], generated_codes, lstm_model)
-        logger.info(f"Verified codes: {verified_codes}")
+        verified_codes_with_conf = verify_icd_codes(texts[selected_index], generated_codes, lstm_model)
+        verified_codes = [code for code, _ in verified_codes_with_conf]
+        verified_confidences = [conf for _, conf in verified_codes_with_conf]
+        logger.info(f"Verified codes with confidence: {verified_codes_with_conf}")
         
         # Perform hierarchical search
         hierarchical_codes = hierarchical_search(verified_codes)
         logger.info(f"Hierarchical codes: {hierarchical_codes}")
         
-        # Ensemble prediction
-        final_codes = ensemble_prediction(verified_codes, hierarchical_codes)
-        logger.info(f"Final codes: {final_codes}")
+        # Ensemble prediction with confidence scores
+        final_codes_with_conf = ensemble_prediction(verified_codes_with_conf, hierarchical_codes)
+        final_codes = [code for code, _ in final_codes_with_conf]
+        final_confidences = [conf for _, conf in final_codes_with_conf]
+        logger.info(f"Final codes with confidence: {final_codes_with_conf}")
         
         # Generate explanation
         explanation = explain_prediction(texts[selected_index], final_codes)

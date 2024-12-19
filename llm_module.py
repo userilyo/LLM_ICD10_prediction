@@ -8,12 +8,16 @@ logger = logging.getLogger(__name__)
 
 def load_llm_model():
     """Load a smaller pre-trained model for ICD code generation."""
-    model_name = "facebook/bart-base"  # Using a smaller model
-    logger.info(f"Loading model: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    logger.info("Model loaded successfully")
-    return tokenizer, model
+    try:
+        model_name = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"  # Medical domain model
+        logger.info(f"Loading model: {model_name}")
+        tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=512)
+        model = AutoModelForSeq2SeqLM.from_pretrained("facebook/bart-base")  # Keep BART for generation capabilities
+        logger.info("Model loaded successfully")
+        return tokenizer, model
+    except Exception as e:
+        logger.error(f"Error loading LLM model: {str(e)}")
+        raise RuntimeError(f"Failed to load LLM model: {str(e)}")
 
 def generate_prompt(text: str) -> str:
     """Generate a sophisticated prompt for ICD-10 code prediction."""
@@ -111,34 +115,54 @@ def parse_output(output: str) -> list:
         logger.error(f"Error parsing LLM output: {str(e)}")
         return []
 
-def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> list:
+def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> tuple:
     """Generate ICD-10 codes using a pre-trained LLM with sophisticated prompt engineering."""
     logger.info("Generating ICD codes...")
     tokenizer, model = model_tuple
     prompt = generate_prompt(text)
     
     logger.info("Tokenizing input...")
-    inputs = tokenizer(prompt, return_tensors="pt", max_length=1024, truncation=True)
+    inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)
     
     logger.info("Running LLM inference...")
-    with torch.no_grad():
-        outputs = model.generate(
-            inputs.input_ids,
-            max_length=max_length,
-            num_return_sequences=1,
-            num_beams=5,
-            do_sample=True,
-            temperature=0.7,
-            top_k=50,
-            top_p=0.95,
-            repetition_penalty=1.2,
-            length_penalty=1.0,
-            no_repeat_ngram_size=3,
-        )
-    
-    decoded_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    logger.info("LLM inference complete.")
-    logger.info(f"Raw LLM output: {decoded_output}")
-    
-    codes = parse_output(decoded_output)
-    return codes
+    try:
+        with torch.no_grad():
+            outputs = model.generate(
+                inputs.input_ids,
+                max_length=max_length,
+                num_return_sequences=3,  # Generate multiple sequences
+                num_beams=5,
+                do_sample=True,
+                temperature=0.7,
+                top_k=50,
+                top_p=0.95,
+                repetition_penalty=1.2,
+                length_penalty=1.0,
+                no_repeat_ngram_size=3,
+                return_dict_in_generate=True,
+                output_scores=True,  # Get prediction scores
+            )
+        
+        # Process multiple sequences and their scores
+        sequences = outputs.sequences
+        scores = torch.stack(outputs.sequences_scores)
+        
+        # Decode each sequence and get codes with confidence
+        codes_with_confidence = []
+        for seq, score in zip(sequences, scores):
+            decoded_output = tokenizer.decode(seq, skip_special_tokens=True)
+            codes = parse_output(decoded_output)
+            confidence = torch.sigmoid(score).item()  # Convert to probability
+            codes_with_confidence.extend([(code, confidence) for code in codes])
+        
+        # Deduplicate and sort by confidence
+        unique_codes = {}
+        for code, conf in codes_with_confidence:
+            if code not in unique_codes or conf > unique_codes[code]:
+                unique_codes[code] = conf
+        
+        # Return codes and their confidence scores
+        return [(code, conf) for code, conf in unique_codes.items()]
+    except Exception as e:
+        logger.error(f"Error in code generation: {str(e)}")
+        return []

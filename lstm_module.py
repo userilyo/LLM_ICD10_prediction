@@ -52,31 +52,44 @@ def load_lstm_model():
         raise RuntimeError(f"Failed to load LSTM model: {str(e)}")
 
 def verify_icd_codes(text: str, icd_codes: list, model_tuple) -> list:
-    """Verify ICD-10 codes using LSTM-based verification."""
-    tokenizer, bert_model, lstm_verifier = model_tuple
-    
-    # Tokenize and encode the input text
-    inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True, padding=True)
-    
-    # Get BERT embeddings
-    with torch.no_grad():
-        outputs = bert_model(**inputs)
-        embeddings = outputs.last_hidden_state
-    
-    # Verify each ICD code
-    verified_codes = []
-    for code in icd_codes:
-        # Combine text embeddings with code embedding (simple concatenation)
-        code_embedding = tokenizer.encode(code, return_tensors="pt")
-        code_outputs = bert_model(code_embedding)
-        code_embedding = code_outputs.last_hidden_state.mean(dim=1)
-        combined_embedding = torch.cat([embeddings.mean(dim=1), code_embedding], dim=1)
+    """Verify ICD-10 codes using LSTM-based verification and return confidence scores."""
+    try:
+        tokenizer, bert_model, lstm_verifier = model_tuple
+        device = next(bert_model.parameters()).device
         
-        # Verify using LSTM
+        # Tokenize and encode the input text
+        inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True, padding=True)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        
+        # Get BERT embeddings
         with torch.no_grad():
-            prediction = lstm_verifier(combined_embedding)
+            outputs = bert_model(**inputs)
+            embeddings = outputs.last_hidden_state
         
-        if prediction.item() > 0.5:  # Threshold for binary classification
-            verified_codes.append(code)
-    
-    return verified_codes
+        # Verify each ICD code with confidence scores
+        verified_codes_with_conf = []
+        for code in icd_codes:
+            try:
+                # Combine text embeddings with code embedding
+                code_embedding = tokenizer.encode(code, return_tensors="pt").to(device)
+                code_outputs = bert_model(code_embedding)
+                code_embedding = code_outputs.last_hidden_state.mean(dim=1)
+                combined_embedding = torch.cat([embeddings.mean(dim=1), code_embedding], dim=1)
+                
+                # Get prediction confidence
+                with torch.no_grad():
+                    confidence = lstm_verifier(combined_embedding).item()
+                
+                if confidence > 0.5:  # Keep threshold but return confidence
+                    verified_codes_with_conf.append((code, confidence))
+            except Exception as e:
+                logger.warning(f"Error processing code {code}: {str(e)}")
+                continue
+        
+        # Sort by confidence
+        verified_codes_with_conf.sort(key=lambda x: x[1], reverse=True)
+        return verified_codes_with_conf
+        
+    except Exception as e:
+        logger.error(f"Error in LSTM verification: {str(e)}")
+        return []
