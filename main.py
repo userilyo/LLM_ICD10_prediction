@@ -27,9 +27,17 @@ def load_models():
 @st.cache_data
 def load_data():
     logger.info("Loading MIMIC-III data...")
-    data = load_and_prepare_mimic_data('data/mimic_iii_sample.csv')
-    logger.info("MIMIC-III data loaded successfully")
-    return data
+    try:
+        data = load_and_prepare_mimic_data('data/mimic_iii_sample.csv')
+        logger.info("MIMIC-III data loaded successfully")
+        return data
+    except FileNotFoundError:
+        st.error("Error: MIMIC-III sample data file not found. Please ensure the data file exists in the data directory.")
+        return pd.DataFrame(), [], [], []  # Return empty data structures
+    except Exception as e:
+        st.error(f"Error loading MIMIC-III data: {str(e)}")
+        logger.error(f"Error loading MIMIC-III data: {str(e)}")
+        return pd.DataFrame(), [], [], []  # Return empty data structures
 
 logger.info("Setting page config...")
 st.set_page_config(page_title="ICD-10 Code Prediction App", layout="wide")

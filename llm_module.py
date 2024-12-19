@@ -71,22 +71,45 @@ def generate_prompt(text: str) -> str:
 def parse_output(output: str) -> list:
     """Parse the output to extract ICD-10 codes."""
     logger.info("Parsing LLM output...")
-    lines = output.split('\n')
-    codes = []
-    current_code = None
-    for line in lines:
-        if line.strip().startswith('ICD-10 code:'):
-            if current_code:
-                codes.append(current_code)
-            current_code = line.split(':')[1].strip()
-        elif line.strip().startswith('Code description:'):
-            if current_code:
-                codes.append(current_code)
-                current_code = None
-    if current_code:
-        codes.append(current_code)
-    logger.info(f"Parsed codes: {codes}")
-    return codes
+    try:
+        lines = output.split('\n')
+        codes = []
+        current_code = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            if line.startswith('ICD-10 code:'):
+                if current_code:
+                    # Validate ICD-10 code format (basic check)
+                    if len(current_code) >= 3 and '.' in current_code:
+                        codes.append(current_code)
+                try:
+                    current_code = line.split(':')[1].strip()
+                except IndexError:
+                    logger.warning(f"Malformed ICD-10 code line: {line}")
+                    continue
+                    
+            elif line.startswith('Code description:'):
+                if current_code:
+                    # Validate ICD-10 code format before adding
+                    if len(current_code) >= 3 and '.' in current_code:
+                        codes.append(current_code)
+                    current_code = None
+                    
+        if current_code and len(current_code) >= 3 and '.' in current_code:
+            codes.append(current_code)
+            
+        # Remove duplicates while preserving order
+        codes = list(dict.fromkeys(codes))
+        
+        logger.info(f"Parsed codes: {codes}")
+        return codes
+    except Exception as e:
+        logger.error(f"Error parsing LLM output: {str(e)}")
+        return []
 
 def generate_icd_codes(text: str, model_tuple, max_length: int = 1024) -> list:
     """Generate ICD-10 codes using a pre-trained LLM with sophisticated prompt engineering."""

@@ -19,16 +19,37 @@ class LSTMVerifier(nn.Module):
 
 def load_lstm_model():
     """Load BERT tokenizer and model for feature extraction, and initialize LSTM verifier"""
-    tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
-    bert_model = AutoModel.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
+    try:
+        # Set device
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Load models with error handling
+        tokenizer = AutoTokenizer.from_pretrained(
+            "emilyalsentzer/Bio_ClinicalBERT",
+            local_files_only=False,
+            resume_download=True
+        )
+        bert_model = AutoModel.from_pretrained(
+            "emilyalsentzer/Bio_ClinicalBERT",
+            local_files_only=False,
+            resume_download=True
+        ).to(device)
 
-    input_size = 768  # BERT hidden size
-    hidden_size = 64  # Reduced from 128
-    num_layers = 1  # Reduced from 2
-    num_classes = 1  # Binary classification (valid/invalid)
-    lstm_verifier = LSTMVerifier(input_size, hidden_size, num_layers, num_classes)
-
-    return tokenizer, bert_model, lstm_verifier
+        input_size = 768  # BERT hidden size
+        hidden_size = 64  # Reduced from 128
+        num_layers = 1   # Reduced from 2
+        num_classes = 1  # Binary classification (valid/invalid)
+        
+        lstm_verifier = LSTMVerifier(input_size, hidden_size, num_layers, num_classes).to(device)
+        
+        # Set models to evaluation mode
+        bert_model.eval()
+        lstm_verifier.eval()
+        
+        return tokenizer, bert_model, lstm_verifier
+    except Exception as e:
+        logger.error(f"Error loading LSTM model: {str(e)}")
+        raise RuntimeError(f"Failed to load LSTM model: {str(e)}")
 
 def verify_icd_codes(text: str, icd_codes: list, model_tuple) -> list:
     """Verify ICD-10 codes using LSTM-based verification."""
